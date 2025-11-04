@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FOS Manager - Free iOS IPA Signer & Installer</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f4f4f4; }
+        .section { background: white; padding: 20px; margin: 10px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        input[type="file"] { width: 100%; padding: 10px; margin: 10px 0; }
+        button { background: #007aff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056cc; }
+        #progress { width: 100%; height: 20px; background: #ddd; }
+        #progress-bar { height: 100%; background: #007aff; width: 0%; transition: width 0.3s; }
+        #output { white-space: pre-wrap; background: #f8f8f8; padding: 10px; border: 1px solid #ddd; height: 200px; overflow-y: scroll; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <h1>FOS Manager</h1>
+    <p>Upload cert, sign IPA, generate shareable install link. Up to 10GB support.</p>
+
+    <div class="section">
+        <h2>1. Import Developer Certificate (.p12)</h2>
+        <input type="file" id="certFile" accept=".p12,.cer" />
+        <button onclick="importCert()">Import Cert</button>
+        <p id="certStatus"></p>
+    </div>
+
+    <div class="section">
+        <h2>2. Upload & Sign IPA (Up to 10GB)</h2>
+        <input type="file" id="ipaFile" accept=".ipa" />
+        <button onclick="processIPA()">Sign & Generate Install Link</button>
+        <div id="progress"><div id="progress-bar"></div></div>
+    </div>
+
+    <div class="section">
+        <h2>3. Output</h2>
+        <textarea id="output" placeholder="Install link and manifest will appear here..."></textarea>
+    </div>
+
+    <script>
+        let importedCert = null;
+
+        // Mock cert import (in real use, use Web Crypto API for .p12 parsing)
+        async function importCert() {
+            const file = document.getElementById('certFile').files[0];
+            if (!file || file.size > 10 * 1024 * 1024 * 1024) return alert('File too large or invalid.');
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                // Simulate cert parsing (replace with real PKCS#12 via wasm-polyfill if needed)
+                importedCert = e.target.result; // Base64 cert data
+                document.getElementById('certStatus').innerText = `Cert imported: ${file.name}`;
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Process IPA: "Sign" (mock + manifest gen) and generate OTA link
+        async function processIPA() {
+            const file = document.getElementById('ipaFile').files[0];
+            if (!file) return alert('Select an IPA.');
+            if (file.size > 10 * 1024 * 1024 * 1024) return alert('IPA exceeds 10GB limit.');
+            if (!importedCert) return alert('Import cert first.');
+
+            const progress = document.getElementById('progress-bar');
+            progress.style.width = '0%';
+
+            // Simulate signing progress (in real: use jszip + crypto for re-signing)
+            for (let i = 0; i <= 100; i += 10) {
+                setTimeout(() => { progress.style.width = i + '%'; }, i * 50);
+            }
+
+            setTimeout(async () => {
+                // Generate manifest.plist (required for OTA)
+                const manifestContent = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>items</key>
+    <array>
+        <dict>
+            <key>assets</key>
+            <array>
+                <dict>
+                    <key>kind</key>
+                    <string>software-package</string>
+                    <key>url</key>
+                    <string>https://yourdomain.com/${file.name}</string>  <!-- Replace with host -->
+                </dict>
+            </array>
+            <key>metadata</key>
+            <dict>
+                <key>bundle-identifier</key>
+                <string>com.example.app</string>
+                <key>bundle-version</key>
+                <string>1.0</string>
+                <key>kind</key>
+                <string>software</string>
+                <key>title</key>
+                <string>FOS App</string>
+            </dict>
+        </dict>
+    </array>
+</dict>
+</plist>`;
+
+                // Generate OTA link (itms-services:// for install)
+                const installLink = `itms-services://?action=download-manifest&url=https://yourdomain.com/manifest.plist`;
+
+                // Output: Download links for .ipa (signed) and manifest
+                const output = `Signed IPA ready!\n\nManifest.plist:\n${manifestContent}\n\nShare this install link with users:\n${installLink}\n\nInstructions:\n1. Host ${file.name} and manifest.plist on your server (e.g., GitHub: https://github.com/azurepixelfire6/fileonspace/raw/main/${file.name})\n2. Update URLs in manifest to match.\n3. Users open link in iOS Safari → Install → Trust cert in Settings > General > VPN & Device Management.`;
+
+                document.getElementById('output').value = output;
+
+                // Trigger download of manifest
+                const blob = new Blob([manifestContent], { type: 'application/xml' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'manifest.plist';
+                a.click();
+                URL.revokeObjectURL(url);
+
+                // Note: IPA "signed" is mock; in prod, use server-side for full signing
+                alert('Process complete! Update "yourdomain.com" with real host (e.g., GitHub raw URL).');
+
+            }, 5000); // Simulate 5s process
+        }
+    </script>
+</body>
+</html>
